@@ -1,0 +1,49 @@
+name: Quality gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  production-readiness:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 06-lab-complete
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: python -X utf8 check_production_ready.py
+
+  evaluate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 06-lab-complete/benchmark-observability/develop
+    env:
+      AGENT_VERSION: v2
+      MOCK_ERROR_RATE: "0"
+      MOCK_SLOW_RATE: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Evaluate agent
+        run: |
+          python -m uvicorn app:app --host 127.0.0.1 --port 8002 > /tmp/day14-agent.log 2>&1 &
+          agent=$!
+          trap 'kill "$agent" 2>/dev/null || true' EXIT
+          if ! curl --fail --silent --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:8002/health; then
+            cat /tmp/day14-agent.log
+            exit 1
+          fi
+          python eval/run_eval.py --url http://127.0.0.1:8002 --min-accuracy 0.85
