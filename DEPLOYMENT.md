@@ -6,6 +6,8 @@
 
 Service triển khai dùng thư mục `06-lab-complete/`, Dockerfile multi-stage và cấu hình `railway.toml`. Cấu hình health check là `/health`. Agent nhận cổng từ `PORT` và cần một Redis service để `/ready` báo sẵn sàng và `/ask` xử lý câu hỏi.
 
+Cả agent và Redis đều Online trên dashboard. Bản deploy của agent hiển thị Active và Deployment successful. [Dashboard](screenshots/dashboard.png) · [Trạng thái deploy](screenshots/running.png)
+
 | Biến môi trường | Giá trị cần đặt khi triển khai |
 | --- | --- |
 | `ENVIRONMENT` | `production` |
