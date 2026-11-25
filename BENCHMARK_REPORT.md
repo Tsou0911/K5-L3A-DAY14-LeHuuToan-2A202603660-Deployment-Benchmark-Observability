@@ -59,3 +59,38 @@ Retrieval làm tăng số token và tổng chi phí mock so với v1, đồng th
 `http_requests_total` là counter, `agent_in_flight_requests` là gauge và `http_request_duration_seconds` là histogram. Agent dùng route template để nhóm request. Nếu gắn từng đường dẫn thực vào label thì mỗi đường dẫn mới có thể tạo time series mới và tăng bộ nhớ Prometheus. Histogram `agent_question_length_chars` ghi phân bố độ dài câu hỏi theo bucket cố định.
 
 Chất lượng câu trả lời có thể giảm dù latency và tỷ lệ lỗi vẫn tốt. Để phát hiện, chạy eval định kỳ với golden dataset và dùng accuracy cùng số regression làm điều kiện phát hành.
+
+### 4.1 Dashboard và trace
+
+- [Dashboard Grafana](screenshots/grafana-dashboard.png) hiển thị traffic, error rate, p95, request đang xử lý, instance và chi phí mock.
+- [Trace chậm](screenshots/jaeger-slow-trace.png), ID `d4e2c8d1e2781e38f0b6cfe3d7381b8d`. Request mất **1716,21 ms**. Span `chat mock-llm-small` mất **1690,95 ms** (98,53% tổng thời gian), nằm trong span `agent.run`.
+- [Trace lỗi](screenshots/jaeger-error-trace.png), ID `d6bd732fd894cfa17e99f2b6cccef518`. Request trả **503** sau **102,97 ms**. Jaeger ghi sự kiện `exception` trên span gọi LLM.
+
+Dòng log tương ứng lần lượt là sự kiện HTTP của trace chậm và lỗi mô phỏng upstream của trace lỗi.
+
+```jsonl
+{"ts":"2026-11-25T08:11:44.718614+00:00","level":"INFO","service":"observable-agent","instance":"8e015aec3c2d","event":"http_request","trace_id":"d4e2c8d1e2781e38f0b6cfe3d7381b8d","span_id":"76a8bbc22be45a32","request_id":"45b996b759e9","method":"POST","route":"/ask","status":200,"ms":1715.6}
+{"ts":"2026-11-25T08:11:44.475864+00:00","level":"INFO","service":"observable-agent","instance":"72ff820c6d76","event":"llm_error","trace_id":"d6bd732fd894cfa17e99f2b6cccef518","span_id":"b4355db068c91872","request_id":"bca63aeccab0","error":"Upstream LLM error: 503 Service Unavailable (mock)"}
+```
+
+### 4.2 Cảnh báo Prometheus
+
+Đặt `MOCK_ERROR_RATE=0.2` và `MOCK_SLOW_RATE=0.3` trên stack local rồi gửi request liên tục đến `/ask`. Thời gian bên dưới tính từ lúc bắt đầu gửi request sau khi stack báo healthy, với chu kỳ thăm dò 2 giây. [Ảnh hai cảnh báo cùng firing](screenshots/prometheus-alert-firing.png)
+
+| Thay đổi | Alert | Thời gian quan sát | Panel liên quan |
+| --- | --- | --- | --- |
+| Tăng xác suất lỗi mock lên 20% | `AgentHighErrorRate` | 86,6 giây | Error rate |
+| Tăng xác suất request chậm lên 30% | `AgentHighLatencyP95` | 143,0 giây | Latency p95 |
+
+Rule lỗi yêu cầu tỷ lệ lỗi trên 5% trong 1 phút. Rule độ trễ yêu cầu p95 trên 1 giây trong 2 phút. Dữ liệu được scrape và đánh giá theo chu kỳ nên thời điểm quan sát có thể muộn hơn thời gian `for` của rule. `LLMCostBurnRateHigh` đã firing từ lượt load test trước thí nghiệm.
+
+## 5. Benchmark scaling
+
+Locust headless chạy 100 user, ramp 10 user/giây và thời lượng 2 phút. Số bên dưới lấy từ dòng `POST /ask` trong hai CSV.
+
+| Số instance | Request | RPS | p50 (ms) | p95 (ms) | p99 (ms) | Thất bại |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 7068 | 59.15 | 190 | 320 | 1700 | 73 (1.03%) |
+| 3 | 7142 | 59.89 | 190 | 220 | 1700 | 65 (0.91%) |
+
+Tăng từ một lên ba instance giữ RPS gần như nhau ở tải này và giảm p95 quan sát được. Cả hai lượt còn p99 ở khoảng 1,7 giây, phù hợp với việc mock chủ động thêm 1,5 giây vào một phần request. Locust dùng cùng số user và khoảng chờ giữa các tác vụ, nên đây là phép so sánh ở một cấu hình tải cố định.

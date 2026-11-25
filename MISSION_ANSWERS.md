@@ -67,7 +67,7 @@ Bản develop trong container trả HTTP 200 khi gọi `POST /ask?question=Hello
 
 Railway dùng `railway.toml` để chọn Dockerfile và health check. Render Blueprint dùng YAML để khai báo service và nguồn biến môi trường. Trong ví dụ Cloud Run, pipeline Cloud Build tạo image, đẩy image lên registry, rồi khai báo service chạy image đó với tài nguyên và biến môi trường tương ứng.
 
-Xem [DEPLOYMENT.md](DEPLOYMENT.md) để biết cấu hình của agent Part 6 và trạng thái URL public.
+Agent Part 6 đã chạy trên Railway với Redis. Bốn bài kiểm tra public trả lần lượt `200`, `200`, `401` và `200`. [URL public](https://agent-production-69904596.up.railway.app/health) · [Cấu hình và lệnh kiểm tra](DEPLOYMENT.md)
 
 ## Part 4 — API Security
 
@@ -96,7 +96,25 @@ Rate limiter giới hạn số request trong một cửa sổ thời gian. Cost 
 
 Khi chạy riêng bài runtime trong container Linux với Redis, request đang xử lý trả **HTTP 200** sau khi gửi SIGTERM và tiến trình thoát với code 0. Lần chạy Linux dùng `--skip-docker` và chỉ mount thư mục Part 6, vì vậy không dùng kết quả đó làm điểm tổng chính thức.
 
+Bài chấm đầy đủ trên runner Ubuntu của GitHub Actions đạt **PASS 12/12**. Script chấm chỉ trả exit code 0 khi mọi tiêu chí đạt. [Kết quả chạy bài chấm và eval](https://github.com/Tsou0911/K5-L3A-DAY14-LeHuuToan-2A202603660-Deployment-Benchmark-Observability/actions/runs/45574458813)
+
+```text
+Checklist Deliverable — GitHub Actions (Ubuntu)
+✅ Dockerfile (multi-stage, < 500 MB)
+✅ docker-compose.yml (agent + redis)
+✅ .dockerignore
+✅ Health check endpoint (GET /health)
+✅ Readiness endpoint (GET /ready)
+✅ API Key authentication
+✅ Rate limiting
+✅ Cost guard
+✅ Config từ environment variables
+✅ Structured logging
+✅ Graceful shutdown
+✅ Public URL ready (Railway / Render config)
+```
+
 ## AI log
 
 - **CP1:** Yêu cầu Codex làm CP1. Codex đối chiếu hai bản `app.py`, soạn phần trả lời và chạy thử HTTP trên máy. Codex xác nhận bản develop trả 200 với `question=Hello` sau khi bật UTF-8. Bảng production dựa trên đọc mã nguồn. Phần tự chạy lại và diễn giải bằng lời của học viên chưa được ghi nhận.
-- **CP2–CP8:** Yêu cầu Codex hoàn thiện project và push Git. Codex triển khai agent Part 6, sửa cấu hình Docker của các stack mẫu, chạy các kiểm tra local và ghi báo cáo từ output thực tế. Codex bổ sung hai mục kiến thức cho eval và chạy lại trên bộ dữ liệu có sẵn. Phần tự chạy lại và giải thích kết quả của học viên chưa được ghi nhận.
+- **CP2–CP8:** Yêu cầu Codex hoàn thiện project và push Git. Codex triển khai agent Part 6, sửa cấu hình Docker của các stack mẫu, chạy các kiểm tra local và ghi báo cáo từ output thực tế. Codex bổ sung hai mục kiến thức cho eval và chạy lại trên bộ dữ liệu có sẵn. Học viên chọn Railway và xác thực CLI. Codex deploy agent cùng Redis và kiểm tra bốn request public. Phần tự chạy lại và giải thích kết quả của học viên chưa được ghi nhận.
